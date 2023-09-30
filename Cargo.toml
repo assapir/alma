@@ -2,7 +2,7 @@
 name = "alma"
 version = "0.10.0"
 authors = ["Roey Darwish Dror"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 which = "4"
