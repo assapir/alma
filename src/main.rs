@@ -28,6 +28,8 @@ use structopt::StructOpt;
 use tempfile::tempdir;
 use tool::Tool;
 
+use crate::storage::StorageDevice;
+
 fn main() -> anyhow::Result<()> {
     // Get struct of args using structopt
     let app = args::App::from_args();
@@ -145,7 +147,7 @@ fn create(command: args::CreateCommand) -> anyhow::Result<()> {
         None
     };
 
-    let storage_device = storage::StorageDevice::from_path(
+    let mut storage_device = StorageDevice::from_path(
         image_loop
             .as_ref()
             .map(|loop_dev| {
@@ -156,7 +158,8 @@ fn create(command: args::CreateCommand) -> anyhow::Result<()> {
         command.allow_non_removable,
     )?;
 
-    let mount_point = tempdir().context("Error creating a temporary directory")?;
+    storage_device.umount_if_needed();
+
     let disk_path = storage_device.path();
 
     info!("Partitioning the block device");
@@ -205,7 +208,7 @@ fn create(command: args::CreateCommand) -> anyhow::Result<()> {
     };
 
     let root_filesystem = Filesystem::format(root_partition, FilesystemType::Ext4, &mkext4)?;
-
+    let mount_point = tempdir().context("Error creating a temporary directory")?;
     let mount_stack = tool::mount(mount_point.path(), &boot_filesystem, &root_filesystem)?;
 
     if log_enabled!(Level::Debug) {

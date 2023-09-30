@@ -2,7 +2,8 @@ use super::markers::{BlockDevice, Origin};
 use super::partition::Partition;
 use anyhow::{anyhow, Context};
 use log::debug;
-use std::fs::read_to_string;
+use nix::mount::umount;
+use std::fs::{self, read_to_string};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +12,7 @@ pub struct StorageDevice<'a> {
     name: String,
     path: PathBuf,
     origin: PhantomData<&'a dyn Origin>,
+    is_mounted: bool,
 }
 
 impl<'a> StorageDevice<'a> {
@@ -27,9 +29,17 @@ impl<'a> StorageDevice<'a> {
 
         debug!("real path: {:?}, device name: {:?}", path, device_name);
 
+        let path_as_str = path.to_str().expect("Unable to get the path as &str ");
+
+        let is_mounted = fs::read_to_string("/proc/mounts")
+            .context("Unable to read /proc/mounts")?
+            .lines()
+            .any(|line| line.starts_with(&path_as_str));
+
         let _self = Self {
             name: device_name,
             path,
+            is_mounted,
             origin: PhantomData,
         };
 
@@ -89,6 +99,14 @@ impl<'a> StorageDevice<'a> {
             return Err(anyhow!("Partition {} does not exist", index));
         }
         Ok(Partition::new::<Self>(path))
+    }
+
+    pub fn umount_if_needed(&mut self) {
+        if self.is_mounted {
+            debug!("Unmounting {:?}", self.path);
+            let _ = umount(&self.path);
+            self.is_mounted = false;
+        }
     }
 }
 
