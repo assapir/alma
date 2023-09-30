@@ -12,7 +12,12 @@ pub struct StorageDevice<'a> {
     name: String,
     path: PathBuf,
     origin: PhantomData<&'a dyn Origin>,
-    is_mounted: bool,
+    mount_config: Vec<MountConfig>,
+}
+
+#[derive(Debug)]
+pub struct MountConfig {
+    pub mount_point: PathBuf,
 }
 
 impl<'a> StorageDevice<'a> {
@@ -30,16 +35,12 @@ impl<'a> StorageDevice<'a> {
         debug!("real path: {:?}, device name: {:?}", path, device_name);
 
         let path_as_str = path.to_str().expect("Unable to get the path as &str ");
-
-        let is_mounted = fs::read_to_string("/proc/mounts")
-            .context("Unable to read /proc/mounts")?
-            .lines()
-            .any(|line| line.starts_with(&path_as_str));
+        let mount_config = Self::get_mount_point(path_as_str)?;
 
         let _self = Self {
             name: device_name,
             path,
-            is_mounted,
+            mount_config,
             origin: PhantomData,
         };
 
@@ -53,6 +54,20 @@ impl<'a> StorageDevice<'a> {
         }
 
         Ok(_self)
+    }
+
+    fn get_mount_point(path: &str) -> anyhow::Result<Vec<MountConfig>> {
+        let mounts = fs::read_to_string("/proc/mounts").context("Unable to read /proc/mounts")?;
+        let mount_line: Vec<MountConfig> = mounts
+            .lines()
+            .filter(|line| line.starts_with(path))
+            .map(|mount_line| {
+                let mut mount_point = mount_line.split_ascii_whitespace();
+                let path = PathBuf::from(mount_point.nth(1).unwrap());
+                MountConfig { mount_point: path }
+            })
+            .collect();
+        Ok(mount_line)
     }
 
     fn sys_path(&self) -> PathBuf {
@@ -102,11 +117,11 @@ impl<'a> StorageDevice<'a> {
     }
 
     pub fn umount_if_needed(&mut self) {
-        if self.is_mounted {
-            debug!("Unmounting {:?}", self.path);
-            let _ = umount(&self.path);
-            self.is_mounted = false;
+        for config in &self.mount_config {
+            debug!("Unmounting {:?}", config.mount_point);
+            let _ = umount(&config.mount_point);
         }
+        self.mount_config = vec![]
     }
 }
 
