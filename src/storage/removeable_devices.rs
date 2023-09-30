@@ -30,15 +30,15 @@ fn trimmed(source: String) -> String {
 }
 
 fn is_removable_device(device: &DirEntry) -> Result<bool, anyhow::Error> {
-    Ok(fs::read_to_string(device.path().join("removable"))
+    fs::read_to_string(device.path().join("removable"))
         .map(|v| v == "1\n")
-        .context("Error querying storage devices")?)
+        .context("Error querying storage devices")
 }
 
 fn get_model(device: &DirEntry) -> Result<String, anyhow::Error> {
-    Ok(fs::read_to_string(device.path().join("device/model"))
+    fs::read_to_string(device.path().join("device/model"))
         .map(trimmed)
-        .context("Error querying storage devices")?)
+        .context("Error querying storage devices")
 }
 
 pub fn get_storage_devices(allow_non_removable: bool) -> anyhow::Result<Vec<Device>> {
